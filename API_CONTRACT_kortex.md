@@ -85,11 +85,25 @@ are left untouched. `full_name`, `experience_level`, `target_roles`, and
 `404` (`PROFILE_NOT_FOUND`) if the JWT is valid but no `profiles` row exists yet.
 
 ### `POST /profile/resume`
-`multipart/form-data`, field `file` (PDF, max 5MB)
+`multipart/form-data`, field `file` (PDF, max 5MB). Rejects wrong file type
+or oversized files with `422` (`RESUME_INVALID_TYPE`, `RESUME_TOO_LARGE`)
+before any Storage I/O — PDF-ness is checked both by `Content-Type` and by
+the file's magic bytes (`%PDF-`), not the client-supplied header alone.
+Stored at `{user_id}/resume.pdf` in the private `resumes` Storage bucket
+(RLS-scoped to the caller's own prefix, same as every other write in this
+API); a re-upload overwrites the previous file. `404`
+(`PROFILE_NOT_FOUND`) if the JWT is valid but no `profiles` row exists yet
+(same edge case as `PATCH /profile`).
 ```json
 // 200 Response
-{ "resume_url": "string", "parsed_preview": "first 500 chars of extracted text" }
+{ "resume_url": "string" }
 ```
+`resume_url` here is a freshly generated signed URL (1 hour TTL), immediately
+usable by the client. **Not yet implemented**: `parsed_preview` and
+`profiles.resume_text` — extracting resume text (PyMuPDF) is a separate,
+later commit; this endpoint only stores the file and updates
+`profiles.resume_url` (to the stable object path, not the signed URL, since
+a signed URL expires and would go stale if persisted).
 
 ---
 

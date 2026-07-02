@@ -51,3 +51,15 @@ class ProfileUpdate(BaseModel):
             if field_name in self.model_fields_set and getattr(self, field_name) is None:
                 raise ValueError(f"'{field_name}' cannot be null")
         return self
+
+
+class ResumeUploadResponse(BaseModel):
+    """Response for ``POST /profile/resume``.
+
+    ``resume_url`` here is a freshly generated signed URL, immediately
+    usable by the client. The value persisted to ``profiles.resume_url`` is
+    the stable object path within the `resumes` bucket, not this signed URL
+    — a signed URL expires and would go stale if stored directly.
+    """
+
+    resume_url: str

@@ -136,6 +136,33 @@ class FakeTable:
         return _FakeUpsert(self, values, on_conflict)
 
 
+class _FakeBucketProxy:
+    def __init__(self, storage: FakeStorage, bucket: str) -> None:
+        self._storage = storage
+        self._bucket = bucket
+
+    async def upload(
+        self, path: str, content: bytes, options: dict[str, str] | None = None
+    ) -> dict[str, str]:
+        self._storage.objects[(self._bucket, path)] = content
+        return {"path": path}
+
+    async def create_signed_url(
+        self, path: str, expires_in: int, options: dict[str, Any] | None = None
+    ) -> dict[str, str]:
+        return {"signedURL": f"https://fake.storage/{self._bucket}/{path}?token=fake"}
+
+
+class FakeStorage:
+    """In-memory stand-in for `client.storage` (Supabase Storage)."""
+
+    def __init__(self) -> None:
+        self.objects: dict[tuple[str, str], bytes] = {}
+
+    def from_(self, bucket: str) -> _FakeBucketProxy:
+        return _FakeBucketProxy(self, bucket)
+
+
 class FakeClient:
     """Stand-in for the Supabase client returned by `get_user_scoped_client` /
     `get_anon_client`."""
@@ -154,6 +181,7 @@ class FakeClient:
             "jobs": FakeTable(jobs if jobs is not None else []),
             "job_matches": FakeTable(job_matches if job_matches is not None else []),
         }
+        self.storage = FakeStorage()
 
     def table(self, name: str) -> FakeTable:
         return self._tables[name]

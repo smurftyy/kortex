@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable
 
 import jwt
@@ -24,7 +25,23 @@ PUBLIC_PATHS = frozenset(
     }
 )
 
+# `jobs` has no RLS (public read; see SCHEMA_kortex.md section 4), so its
+# list/detail GETs skip auth entirely. Scoped to GET + a single path segment
+# so `POST /jobs/{id}/approve|skip|save` (which do require auth) never match.
+_PUBLIC_GET_PATTERNS = (
+    re.compile(r"^/api/v1/jobs$"),
+    re.compile(r"^/api/v1/jobs/[^/]+$"),
+)
+
 _UNAUTHORIZED_MESSAGE = "Missing or invalid authentication token."
+
+
+def _is_public(request: Request) -> bool:
+    if request.url.path in PUBLIC_PATHS:
+        return True
+    if request.method == "GET":
+        return any(pattern.match(request.url.path) for pattern in _PUBLIC_GET_PATTERNS)
+    return False
 
 
 def _unauthorized() -> JSONResponse:
@@ -48,7 +65,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        if request.url.path in PUBLIC_PATHS:
+        if _is_public(request):
             return await call_next(request)
 
         header = request.headers.get("authorization", "")

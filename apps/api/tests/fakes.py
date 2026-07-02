@@ -1,31 +1,71 @@
 """In-memory stand-ins for the Supabase/PostgREST client used by route tests.
 
-These don't hit a real Postgres instance. `FakeTable`'s `.eq(...)` filtering
-is what stands in for Postgres RLS: since every route derives its filter
-value from the caller's own JWT (never from the request body), filtering
-correctly here is enough to prove a route can't cross into another user's
-row — the same guarantee the real `profiles`/`preferences` RLS policies
-enforce, which were validated directly against a real Postgres instance in
-Commit 2.
+These don't hit a real Postgres instance. `FakeTable`'s filtering is what
+stands in for Postgres RLS: since every route derives its filter value from
+the caller's own JWT (never from the request body), filtering correctly
+here is enough to prove a route can't cross into another user's row — the
+same guarantee the real RLS policies enforce, which were validated directly
+against a real Postgres instance in Commits 2 and 5.
 """
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
 
 class _FakeQuery:
-    def __init__(self, table: FakeTable, mode: str, values: dict | None = None) -> None:
+    def __init__(
+        self, table: FakeTable, mode: str, values: dict | None = None, count: str | None = None
+    ) -> None:
         self._table = table
         self._mode = mode
         self._values = values
-        self._filters: dict[str, Any] = {}
+        self._count = count
+        self._predicates: list[Callable[[dict], bool]] = []
         self._single = False
+        self._order_col: str | None = None
+        self._order_desc = False
+        self._limit: int | None = None
+        self._offset = 0
 
     def eq(self, column: str, value: Any) -> _FakeQuery:
-        self._filters[column] = value
+        self._predicates.append(lambda row: row.get(column) == value)
+        return self
+
+    def ilike(self, column: str, pattern: str) -> _FakeQuery:
+        needle = pattern.strip("%").lower()
+        self._predicates.append(lambda row: needle in (row.get(column) or "").lower())
+        return self
+
+    def contains(self, column: str, value: Any) -> _FakeQuery:
+        needles = list(value)
+        self._predicates.append(
+            lambda row: all(v in (row.get(column) or []) for v in needles)
+        )
+        return self
+
+    def gte(self, column: str, value: Any) -> _FakeQuery:
+        self._predicates.append(lambda row: (row.get(column) or "") >= value)
+        return self
+
+    def lte(self, column: str, value: Any) -> _FakeQuery:
+        self._predicates.append(lambda row: (row.get(column) or "") <= value)
+        return self
+
+    def order(self, column: str, *, desc: bool = False, **_kwargs: Any) -> _FakeQuery:
+        self._order_col = column
+        self._order_desc = desc
+        return self
+
+    def limit(self, size: int, **_kwargs: Any) -> _FakeQuery:
+        self._limit = size
+        return self
+
+    def offset(self, size: int) -> _FakeQuery:
+        self._offset = size
         return self
 
     def maybe_single(self) -> _FakeQuery:
@@ -33,19 +73,25 @@ class _FakeQuery:
         return self
 
     async def execute(self) -> SimpleNamespace | None:
-        matches = [
-            row
-            for row in self._table.rows
-            if all(row.get(k) == v for k, v in self._filters.items())
-        ]
+        matches = [row for row in self._table.rows if all(p(row) for p in self._predicates)]
 
         if self._mode == "update":
             for row in matches:
                 row.update(self._values or {})
 
+        total = len(matches) if self._count else None
+
+        if self._order_col is not None:
+            col = self._order_col
+            matches = sorted(matches, key=lambda r: r.get(col), reverse=self._order_desc)
+        if self._offset:
+            matches = matches[self._offset :]
+        if self._limit is not None:
+            matches = matches[: self._limit]
+
         if self._single:
-            return SimpleNamespace(data=matches[0]) if matches else None
-        return SimpleNamespace(data=matches)
+            return SimpleNamespace(data=matches[0], count=total) if matches else None
+        return SimpleNamespace(data=matches, count=total)
 
 
 class _FakeUpsert:
@@ -80,8 +126,8 @@ class FakeTable:
     def __init__(self, rows: list[dict]) -> None:
         self.rows = rows
 
-    def select(self, *_columns: str) -> _FakeQuery:
-        return _FakeQuery(self, mode="select")
+    def select(self, *_columns: str, count: str | None = None) -> _FakeQuery:
+        return _FakeQuery(self, mode="select", count=count)
 
     def update(self, values: dict) -> _FakeQuery:
         return _FakeQuery(self, mode="update", values=values)
@@ -91,15 +137,22 @@ class FakeTable:
 
 
 class FakeClient:
-    """Stand-in for the RLS-scoped Supabase client returned by
-    `get_user_scoped_client`."""
+    """Stand-in for the Supabase client returned by `get_user_scoped_client` /
+    `get_anon_client`."""
 
     def __init__(
-        self, *, profiles: list[dict] | None = None, preferences: list[dict] | None = None
+        self,
+        *,
+        profiles: list[dict] | None = None,
+        preferences: list[dict] | None = None,
+        jobs: list[dict] | None = None,
+        job_matches: list[dict] | None = None,
     ) -> None:
         self._tables = {
             "profiles": FakeTable(profiles if profiles is not None else []),
             "preferences": FakeTable(preferences if preferences is not None else []),
+            "jobs": FakeTable(jobs if jobs is not None else []),
+            "job_matches": FakeTable(job_matches if job_matches is not None else []),
         }
 
     def table(self, name: str) -> FakeTable:

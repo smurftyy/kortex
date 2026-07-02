@@ -46,6 +46,56 @@ def make_preferences_row(*, user_id: str = TEST_USER_ID) -> dict:
     }
 
 
+TEST_JOB_ID = "33333333-3333-3333-3333-333333333333"
+
+
+def make_job_row(
+    *,
+    job_id: str = TEST_JOB_ID,
+    title: str = "Backend Intern",
+    company: str = "Acme",
+    source_board: str = "greenhouse",
+    location: str = "Lagos, Nigeria",
+    stack_tags: list[str] | None = None,
+    is_active: bool = True,
+    posted_at: str | None = "2026-01-01T00:00:00+00:00",
+) -> dict:
+    return {
+        "id": job_id,
+        "source_board": source_board,
+        "external_id": None,
+        "title": title,
+        "company": company,
+        "location": location,
+        "description": "A great opportunity.",
+        "stack_tags": stack_tags if stack_tags is not None else ["Python"],
+        "apply_url": "https://example.com/apply",
+        "dedup_hash": f"hash-{job_id}",
+        "posted_at": posted_at,
+        "discovered_at": "2026-01-02T00:00:00+00:00",
+        "is_active": is_active,
+    }
+
+
+def make_job_match_row(
+    *,
+    user_id: str = TEST_USER_ID,
+    job_id: str = TEST_JOB_ID,
+    match_status: str = "new",
+    match_score: float = 7.5,
+) -> dict:
+    return {
+        "id": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"match-{user_id}-{job_id}")),
+        "user_id": user_id,
+        "job_id": job_id,
+        "match_score": match_score,
+        "score_breakdown": {"skill_match": match_score},
+        "status": match_status,
+        "notified_at": None,
+        "created_at": "2026-01-01T00:00:00+00:00",
+    }
+
+
 def make_token(
     *,
     sub: str = TEST_USER_ID,

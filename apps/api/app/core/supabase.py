@@ -22,3 +22,15 @@ async def get_user_scoped_client(access_token: str) -> AsyncClient:
     client = await acreate_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
     client.postgrest.auth(access_token)
     return client
+
+
+async def get_anon_client() -> AsyncClient:
+    """Build an unauthenticated Supabase client (Postgres role ``anon``).
+
+    Used for the public `jobs` reads (no RLS on that table — see
+    SCHEMA_kortex.md section 4 and the Commit 5 migration) where there is no
+    caller JWT to scope a request to.
+    """
+
+    settings = get_settings()
+    return await acreate_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)

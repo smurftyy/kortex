@@ -90,6 +90,7 @@ async def put_preferences(
 
     result = await client.table("preferences").upsert(body, on_conflict="user_id").execute()
     row = result.data[0]
+    assert isinstance(row, dict)
 
     response.status_code = status.HTTP_200_OK if already_existed else status.HTTP_201_CREATED
     return PreferencesResponse(**row)

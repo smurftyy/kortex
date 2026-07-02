@@ -64,7 +64,14 @@ class _FakeUpsert:
             existing.update(self._values)
             row = existing
         else:
-            row = {"id": str(uuid.uuid4()), **self._values}
+            # Simulate the DB's `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`
+            # (Commit 2 migration) — the app never sends this on insert, so
+            # Postgres fills it in.
+            row = {
+                "id": str(uuid.uuid4()),
+                "created_at": "2026-01-01T00:00:00+00:00",
+                **self._values,
+            }
             self._table.rows.append(row)
         return SimpleNamespace(data=[row])
 

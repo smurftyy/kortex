@@ -51,7 +51,7 @@ async def patch_profile(
         )
         rows = [fetched.data] if fetched is not None and isinstance(fetched.data, dict) else []
 
-    if not rows:
+    if not rows or not isinstance(rows[0], dict):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=error_body("PROFILE_NOT_FOUND", "This account has no profile yet."),

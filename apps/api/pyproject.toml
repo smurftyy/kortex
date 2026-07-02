@@ -19,6 +19,7 @@ dependencies = [
     "redis",
     "arq",
     "python-multipart",
+    "pyjwt",
 ]
 
 [project.optional-dependencies]

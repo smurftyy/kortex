@@ -21,17 +21,20 @@ ALTER TABLE preferences ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can select their own preferences"
     ON preferences
     FOR SELECT
+    TO authenticated
     USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own preferences"
     ON preferences
     FOR UPDATE
+    TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own preferences"
     ON preferences
     FOR INSERT
+    TO authenticated
     WITH CHECK (auth.uid() = user_id);
 
 -- No DELETE policy: preferences rows are removed via the profiles FK

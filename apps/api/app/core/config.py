@@ -32,8 +32,10 @@ class Settings(BaseSettings):
     # Postgres (Supabase connection string)
     DATABASE_URL: str
 
-    # Redis / ARQ queue
-    REDIS_URL: str = "redis://localhost:6379"
+    # Redis / ARQ queue — defaults to the Docker Compose service name
+    # ("redis"), not localhost; override in .env for plain local dev
+    # running the API/worker outside Docker.
+    REDIS_URL: str = "redis://redis:6379"
 
 
 @lru_cache

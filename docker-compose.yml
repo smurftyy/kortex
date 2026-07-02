@@ -8,9 +8,15 @@ services:
     depends_on:
       - redis
 
+  worker:
+    build: ./apps/api
+    command: ["arq", "app.worker.WorkerSettings"]
+    env_file:
+      - ./apps/api/.env
+    depends_on:
+      - redis
+
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-
-  # A worker service (ARQ) is added in Commit 6.

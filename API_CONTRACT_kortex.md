@@ -33,10 +33,29 @@
 ```
 
 ### `GET /auth/me`
+Returns the caller's own `profiles` row (matched via RLS against the JWT's `sub`
+claim, not an application-level filter).
 ```json
 // 200 Response
-{ "id": "uuid", "email": "string", "profile_complete": true }
+{
+  "id": "uuid",
+  "full_name": "string",
+  "phone": "string | null",
+  "location": "string | null",
+  "github_url": "string | null",
+  "portfolio_url": "string | null",
+  "linkedin_url": "string | null",
+  "experience_level": "intern | junior | mid",
+  "target_roles": ["string"],
+  "skills": ["string"],
+  "resume_url": "string | null",
+  "resume_text": "string | null",
+  "created_at": "iso8601",
+  "updated_at": "iso8601"
+}
 ```
+`404` (`PROFILE_NOT_FOUND`) if the JWT is valid but no `profiles` row exists yet
+for that user (edge case: signed up but never completed `PUT /profile`).
 
 ---
 

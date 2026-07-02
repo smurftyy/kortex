@@ -1,8 +1,8 @@
 """Kortex API — FastAPI application entrypoint.
 
 Feature routers are registered incrementally: `GET /auth/me` lands in
-Commit 3. Signup/login/refresh, jobs, and applications follow in later
-commits.
+Commit 3; profile/preferences CRUD lands in Commit 4. Signup/login/refresh
+and jobs follow in later commits.
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.api.routes.auth import router as auth_router
+from app.api.routes.preferences import router as preferences_router
+from app.api.routes.profile import router as profile_router
 from app.middleware.auth import JWTAuthMiddleware
 
 app = FastAPI(
@@ -21,6 +23,8 @@ app = FastAPI(
 
 app.add_middleware(JWTAuthMiddleware)
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(profile_router, prefix="/api/v1")
+app.include_router(preferences_router, prefix="/api/v1")
 
 
 @app.exception_handler(HTTPException)

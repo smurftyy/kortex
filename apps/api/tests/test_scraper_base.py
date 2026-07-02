@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 import pytest
-from app.scrapers.base import BaseScraper, ScraperError
+from app.scrapers.base import BaseScraper, PermanentlyExcludedSourceError, ScraperError
 from app.scrapers.http import RateLimiter, ScraperHTTPClient
 from app.scrapers.schemas import NormalizedJob
 from pydantic import ValidationError
@@ -146,6 +146,37 @@ async def test_rate_limiter_does_not_delay_first_call() -> None:
     assert elapsed < 0.1
 
 
+# --- injectable transport (Commit 12 needs this for multi-company fetch tests) ---
+
+
+async def test_base_scraper_accepts_injectable_transport_for_testing() -> None:
+    """Commit 12's ATS scrapers unit-test their per-company fetch loop
+    deterministically via httpx.MockTransport, injected through a scraper
+    subclass rather than by constructing ScraperHTTPClient directly (which
+    the existing retry-path tests above already do). BaseScraper needs to
+    accept and forward `transport` for that to work."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"ok": True})
+
+    transport = httpx.MockTransport(handler)
+
+    class _TransportDemoScraper(BaseScraper):
+        source_board = "greenhouse"
+
+        async def fetch(self) -> Any:
+            response = await self.http.get("https://example.invalid/x")
+            return response.json()
+
+        def parse(self, raw: Any) -> list[NormalizedJob]:
+            return []
+
+    scraper = _TransportDemoScraper(transport=transport)
+    result = await scraper.run()
+
+    assert result == []
+
+
 # --- retry-with-backoff (deterministic, via MockTransport) ---------------------
 
 
@@ -240,3 +271,18 @@ def test_normalized_job_rejects_unknown_fields() -> None:
             apply_url="https://example.com/job/1",
             dedup_hash="should-not-be-settable-here",  # type: ignore[call-arg]
         )
+
+
+# --- permanently-excluded sources ---------------------------------------------
+
+
+def test_permanently_excluded_source_error_is_a_scraper_error() -> None:
+    error = PermanentlyExcludedSourceError("excluded by design")
+
+    assert isinstance(error, ScraperError)
+
+
+def test_permanently_excluded_source_error_is_never_retriable() -> None:
+    error = PermanentlyExcludedSourceError("excluded by design")
+
+    assert error.retriable is False

@@ -1,0 +1,12 @@
+{
+  "greenhouse": [
+    {"slug": "stripe", "company": "Stripe"},
+    {"slug": "gitlab", "company": "GitLab"}
+  ],
+  "lever": [
+    {"slug": "ro", "company": "Ro"}
+  ],
+  "workable": [
+    {"slug": "zego", "company": "Zego"}
+  ]
+}

@@ -60,6 +60,7 @@ class ScraperHTTPClient:
         backoff_base_seconds: float = 1.0,
         rate_limiter: RateLimiter | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self._timeout = timeout_seconds
         self._max_retries = max_retries
@@ -69,10 +70,17 @@ class ScraperHTTPClient:
         # retry-path testing without hitting a real flaky/slow endpoint.
         # None in real use, which is httpx's normal live-network transport.
         self._transport = transport
+        # Default headers for every request in the session — in particular
+        # `User-Agent`, so a scraper identifies itself honestly (see
+        # RemoteOKScraper: some sources' robots.txt distinguish crawlers by
+        # UA, so a generic/spoofed default here would be the wrong call).
+        self._headers = headers
         self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> ScraperHTTPClient:
-        self._client = httpx.AsyncClient(timeout=self._timeout, transport=self._transport)
+        self._client = httpx.AsyncClient(
+            timeout=self._timeout, transport=self._transport, headers=self._headers
+        )
         return self
 
     async def __aexit__(

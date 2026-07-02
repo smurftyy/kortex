@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from app.core.resume_parsing import ParseStatus
+
 # Columns that are NOT NULL in the profiles table (see SCHEMA_kortex.md section
 # 2). A PATCH may omit them, but may not explicitly set them to null.
 _PROFILE_NOT_NULLABLE_FIELDS = ("full_name", "experience_level", "target_roles", "skills")
@@ -63,3 +65,19 @@ class ResumeUploadResponse(BaseModel):
     """
 
     resume_url: str
+
+
+class ResumeParseResponse(BaseModel):
+    """Response for ``POST /profile/resume/parse``.
+
+    Always 200 — a status field, not an HTTP error, represents "we tried
+    to extract text and here's the outcome," since a corrupt/password-
+    protected/image-only PDF is a property of that specific file, not an
+    invalid request. ``resume_text`` reflects only *this* call's outcome:
+    null unless ``status == "parsed"``, even if a previous successful parse
+    left `profiles.resume_text` populated (a failed re-parse never clears
+    previously-extracted text — see the route for why).
+    """
+
+    status: ParseStatus
+    resume_text: str | None = None

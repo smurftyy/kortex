@@ -99,11 +99,42 @@ API); a re-upload overwrites the previous file. `404`
 { "resume_url": "string" }
 ```
 `resume_url` here is a freshly generated signed URL (1 hour TTL), immediately
-usable by the client. **Not yet implemented**: `parsed_preview` and
-`profiles.resume_text` — extracting resume text (PyMuPDF) is a separate,
-later commit; this endpoint only stores the file and updates
+usable by the client. This endpoint only stores the file and updates
 `profiles.resume_url` (to the stable object path, not the signed URL, since
-a signed URL expires and would go stale if persisted).
+a signed URL expires and would go stale if persisted) — it does not extract
+text; see `POST /profile/resume/parse` below.
+
+### `POST /profile/resume/parse`
+Extracts text from the caller's already-uploaded resume and stores it in
+`profiles.resume_text`. Deliberately a separate call from
+`POST /profile/resume` — upload only stores, this only parses, and each
+fails independently. Runs synchronously (no task queue exists yet); this is
+also the natural seam for a future async job dispatch once one does.
+
+No request body — re-fetches `profiles.resume_url` for the caller (via
+RLS), turns that stable path into a fresh signed URL server-side (same
+pattern as the upload endpoint's response), downloads it, and parses with
+PyMuPDF.
+
+`404` (`PROFILE_NOT_FOUND`) if no `profiles` row exists yet; `404`
+(`RESUME_NOT_FOUND`) if the row exists but no resume has been uploaded
+(`resume_url` is null).
+
+```json
+// 200 Response
+{ "status": "parsed", "resume_text": "string" }
+// or, all still 200 — see note below:
+{ "status": "no_text_found", "resume_text": null }
+{ "status": "password_protected", "resume_text": null }
+{ "status": "corrupt", "resume_text": null }
+```
+Always `200` once the profile/resume-existence checks pass — a corrupt,
+password-protected, or image-only (no text layer) PDF is a property of
+that specific file, not an invalid request, so it's represented by
+`status` rather than an HTTP error. `profiles.resume_text` is only updated
+when `status = "parsed"`; a failed re-parse (e.g. the file was replaced
+with a bad one) never clears text a previous successful parse already
+stored.
 
 ---
 

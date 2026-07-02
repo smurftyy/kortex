@@ -96,6 +96,50 @@ def make_job_match_row(
     }
 
 
+def make_pdf_with_text(text: str = "Hello resume text") -> bytes:
+    """A minimal real PDF with an extractable text layer."""
+
+    import fitz
+
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), text)
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
+def make_blank_pdf() -> bytes:
+    """A structurally valid PDF with no text layer (stands in for a
+    scanned/image-only resume — same observable outcome: no extractable
+    text)."""
+
+    import fitz
+
+    doc = fitz.open()
+    doc.new_page()
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
+def make_password_protected_pdf(owner_pw: str = "owner123", user_pw: str = "user123") -> bytes:
+    """A real PDF encrypted with a user (view) password."""
+
+    import fitz
+
+    doc = fitz.open()
+    doc.new_page()
+    data = doc.tobytes(
+        encryption=fitz.PDF_ENCRYPT_AES_256,
+        owner_pw=owner_pw,
+        user_pw=user_pw,
+        permissions=int(fitz.PDF_PERM_ACCESSIBILITY | fitz.PDF_PERM_PRINT),
+    )
+    doc.close()
+    return data
+
+
 def make_token(
     *,
     sub: str = TEST_USER_ID,

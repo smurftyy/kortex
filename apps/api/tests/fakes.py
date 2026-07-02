@@ -163,6 +163,31 @@ class FakeStorage:
         return _FakeBucketProxy(self, bucket)
 
 
+class _FakeHTTPResponse:
+    def __init__(self, content: bytes, status_code: int = 200) -> None:
+        self.content = content
+        self.status_code = status_code
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"fake http error: {self.status_code}")
+
+
+def install_fake_storage_downloads(monkeypatch: Any, storage: FakeStorage) -> None:
+    """Make `httpx.AsyncClient.get` resolve fake signed storage URLs
+    (`FakeStorage.create_signed_url`'s output) to their in-memory object
+    bytes — for tests exercising a route that downloads via a signed URL
+    rather than calling the Supabase client directly."""
+
+    async def fake_get(self: Any, url: str, *args: Any, **kwargs: Any) -> _FakeHTTPResponse:
+        for (bucket, path), content in storage.objects.items():
+            if url == f"https://fake.storage/{bucket}/{path}?token=fake":
+                return _FakeHTTPResponse(content)
+        return _FakeHTTPResponse(b"", status_code=404)
+
+    monkeypatch.setattr("httpx.AsyncClient.get", fake_get)
+
+
 class FakeClient:
     """Stand-in for the Supabase client returned by `get_user_scoped_client` /
     `get_anon_client`."""

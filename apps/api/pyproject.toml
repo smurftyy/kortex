@@ -20,6 +20,8 @@ dependencies = [
     "arq",
     "python-multipart",
     "pyjwt",
+    "pymupdf",
+    "httpx",
 ]
 
 [project.optional-dependencies]

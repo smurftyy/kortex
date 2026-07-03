@@ -34,3 +34,22 @@ async def get_anon_client() -> AsyncClient:
 
     settings = get_settings()
     return await acreate_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+
+
+async def get_service_client() -> AsyncClient:
+    """Build a Supabase client using the service role key (Postgres role
+    ``service_role``, bypasses RLS).
+
+    Used only by the scraper/daily-scrape worker (`app/worker.py`) — every
+    RLS-protected table's own migration comment says writes/cross-user reads
+    on that table are "service role" only: `jobs` ("writes only from the
+    scraper/worker"), `job_matches` ("No INSERT policy: match rows are
+    created by the scoring worker (service role)"), and reading every user's
+    `profiles`/`preferences` row to score against (RLS on both scopes reads
+    to `auth.uid() = id`/`user_id`, which a per-user JWT can't cross). No API
+    route should ever use this — every route either uses a caller's own JWT
+    or the anon key for public reads.
+    """
+
+    settings = get_settings()
+    return await acreate_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)

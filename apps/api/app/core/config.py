@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     # running the API/worker outside Docker.
     REDIS_URL: str = "redis://redis:6379"
 
+    # Web3.career requires a signup-obtained API token (unlike the other six
+    # boards, all anonymous) -- see docs/superpowers/specs/
+    # 2026-07-03-web3career-scraper-design.md. No token has been obtained
+    # yet, so this is optional (unlike every other field above): the daily
+    # scrape worker skips that one board with a logged warning rather than
+    # failing to start, when it's unset.
+    WEB3CAREER_API_TOKEN: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

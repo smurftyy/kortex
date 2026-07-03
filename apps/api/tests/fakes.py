@@ -99,6 +99,17 @@ class _FakeQuery:
         return SimpleNamespace(data=matches, count=total)
 
 
+class _FakeInsert:
+    def __init__(self, table: FakeTable, values: dict) -> None:
+        self._table = table
+        self._values = values
+
+    async def execute(self) -> SimpleNamespace:
+        row = {"id": str(uuid.uuid4()), **self._values}
+        self._table.rows.append(row)
+        return SimpleNamespace(data=[row])
+
+
 class _FakeUpsert:
     def __init__(self, table: FakeTable, values: dict, on_conflict: str | None) -> None:
         self._table = table
@@ -136,6 +147,9 @@ class FakeTable:
 
     def update(self, values: dict) -> _FakeQuery:
         return _FakeQuery(self, mode="update", values=values)
+
+    def insert(self, values: dict) -> _FakeInsert:
+        return _FakeInsert(self, values)
 
     def upsert(self, values: dict, *, on_conflict: str | None = None) -> _FakeUpsert:
         return _FakeUpsert(self, values, on_conflict)

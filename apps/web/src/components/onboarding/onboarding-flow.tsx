@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { StepPersonal } from "@/components/onboarding/step-personal";
 import { StepPreferences } from "@/components/onboarding/step-preferences";
+import { StepResume } from "@/components/onboarding/step-resume";
 import { StepSkills } from "@/components/onboarding/step-skills";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/field";
@@ -46,7 +47,35 @@ const INITIAL: OnboardingData = {
   scanTime: "08:00",
 };
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
+
+/**
+ * No API endpoint creates the profiles row (PATCH /profile 404s without
+ * one) — the migration's "insert own profile" RLS policy is the intended
+ * creation path, so this one write goes via Supabase. Runs when leaving
+ * step 1 so the resume endpoints (which 404 without a profile) work on
+ * step 3, then again with the complete data on finish.
+ */
+async function upsertProfile(userId: string, data: OnboardingData) {
+  const { error } = await getSupabaseClient()
+    .from("profiles")
+    .upsert(
+      {
+        id: userId,
+        full_name: data.fullName.trim(),
+        phone: data.phone.trim() || null,
+        location: data.location.trim() || null,
+        github_url: data.githubUrl.trim() || null,
+        portfolio_url: data.portfolioUrl.trim() || null,
+        linkedin_url: data.linkedinUrl.trim() || null,
+        experience_level: data.experienceLevel,
+        target_roles: data.targetRoles,
+        skills: data.skills,
+      },
+      { onConflict: "id" },
+    );
+  if (error) throw new Error(error.message);
+}
 
 export function OnboardingFlow() {
   const router = useRouter();
@@ -57,32 +86,18 @@ export function OnboardingFlow() {
   const patch = (partial: Partial<OnboardingData>) =>
     setData((d) => ({ ...d, ...partial }));
 
+  const saveProfile = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not signed in.");
+      await upsertProfile(user.id, data);
+    },
+    onSuccess: () => setStep(2),
+  });
+
   const finish = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not signed in.");
-
-      // No API endpoint creates the profiles row (PATCH /profile 404s
-      // without one) — the migration's "insert own profile" RLS policy is
-      // the intended creation path, so this one write goes via Supabase.
-      const { error } = await getSupabaseClient()
-        .from("profiles")
-        .upsert(
-          {
-            id: user.id,
-            full_name: data.fullName.trim(),
-            phone: data.phone.trim() || null,
-            location: data.location.trim() || null,
-            github_url: data.githubUrl.trim() || null,
-            portfolio_url: data.portfolioUrl.trim() || null,
-            linkedin_url: data.linkedinUrl.trim() || null,
-            experience_level: data.experienceLevel,
-            target_roles: data.targetRoles,
-            skills: data.skills,
-          },
-          { onConflict: "id" },
-        );
-      if (error) throw new Error(error.message);
-
+      await upsertProfile(user.id, data);
       await putPreferences({
         boards_enabled: data.boards,
         location_filter: data.locations,
@@ -95,6 +110,9 @@ export function OnboardingFlow() {
     onSuccess: () => router.replace("/"),
   });
 
+  const pending = saveProfile.isPending || finish.isPending;
+  const mutationError = saveProfile.error ?? finish.error;
+
   const canContinue =
     step === 1
       ? data.fullName.trim().length > 0 && data.experienceLevel !== ""
@@ -103,12 +121,25 @@ export function OnboardingFlow() {
         : true;
 
   const handlePrimary = () => {
+    if (step === 1) {
+      saveProfile.mutate();
+      return;
+    }
     if (step < TOTAL_STEPS) {
       setStep(step + 1);
       return;
     }
     finish.mutate();
   };
+
+  const primaryLabel =
+    step === 1 && saveProfile.isPending
+      ? "Saving…"
+      : step < TOTAL_STEPS
+        ? "Continue"
+        : finish.isPending
+          ? "Finishing…"
+          : "Finish setup";
 
   return (
     <div>
@@ -157,25 +188,22 @@ export function OnboardingFlow() {
         <StepPersonal data={data} onPatch={patch} email={user?.email ?? ""} />
       )}
       {step === 2 && <StepSkills data={data} onPatch={patch} />}
-      {step === 3 && <StepPreferences data={data} onPatch={patch} />}
+      {step === 3 && <StepResume />}
+      {step === 4 && <StepPreferences data={data} onPatch={patch} />}
 
-      {finish.isError && (
+      {mutationError && (
         <div className="mt-6">
-          <FormError>{(finish.error as Error).message}</FormError>
+          <FormError>{(mutationError as Error).message}</FormError>
         </div>
       )}
 
       <div className="mt-8 flex justify-end">
         <Button
           onClick={handlePrimary}
-          disabled={!canContinue || finish.isPending}
+          disabled={!canContinue || pending}
           className="px-6 py-3 text-[14.5px]"
         >
-          {step < TOTAL_STEPS
-            ? "Continue"
-            : finish.isPending
-              ? "Finishing…"
-              : "Finish setup"}
+          {primaryLabel}
         </Button>
       </div>
     </div>

@@ -21,6 +21,8 @@ vi.mock("@/providers/auth-provider", () => ({
 const putPreferences = vi.fn();
 vi.mock("@/lib/api/endpoints", () => ({
   putPreferences: (...args: unknown[]) => putPreferences(...args),
+  uploadResume: vi.fn(),
+  parseResume: vi.fn(),
 }));
 
 const upsertMock = vi.fn();
@@ -51,7 +53,8 @@ describe("OnboardingFlow", () => {
     const user = userEvent.setup();
     renderFlow();
 
-    // Step 1 — personal info
+    // Step 1 — personal info (Continue persists the profile row so the
+    // resume endpoints on step 3 don't 404).
     await user.type(screen.getByLabelText(/full name/i), "Ada Lovelace");
     await user.type(screen.getByLabelText(/phone/i), "+2348000000");
     await user.type(screen.getByLabelText(/^location/i), "Lagos, Nigeria");
@@ -69,7 +72,13 @@ describe("OnboardingFlow", () => {
     await user.click(screen.getByRole("button", { name: "React" }));
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
-    // Step 3 — preferences
+    // Step 3 — resume (optional, skip past it)
+    expect(
+      await screen.findByRole("heading", { name: /upload your master resume/i }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /continue/i }));
+
+    // Step 4 — preferences
     expect(
       await screen.findByRole("heading", { name: /search preferences/i }),
     ).toBeInTheDocument();
@@ -86,7 +95,9 @@ describe("OnboardingFlow", () => {
     await waitFor(() => {
       expect(fromMock).toHaveBeenCalledWith("profiles");
     });
-    expect(upsertMock).toHaveBeenCalledWith(
+    // Once on step-1 Continue, once with the complete data on finish.
+    expect(upsertMock).toHaveBeenCalledTimes(2);
+    expect(upsertMock).toHaveBeenLastCalledWith(
       {
         id: "user-1",
         full_name: "Ada Lovelace",
@@ -138,7 +149,7 @@ describe("OnboardingFlow", () => {
     expect(continueBtn).toBeEnabled();
   });
 
-  it("shows the API error when finishing fails", async () => {
+  it("shows the API error when finishing fails", { timeout: 15_000 }, async () => {
     putPreferences.mockRejectedValue(new Error("network down"));
     const user = userEvent.setup();
     renderFlow();
@@ -149,6 +160,7 @@ describe("OnboardingFlow", () => {
       "intern",
     );
     await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.click(await screen.findByRole("button", { name: /continue/i }));
     await user.click(await screen.findByRole("button", { name: /continue/i }));
     const rolesInput = await screen.findByPlaceholderText(/type a role/i);
     await user.type(rolesInput, "SWE Intern{Enter}");

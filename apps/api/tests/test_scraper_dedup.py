@@ -8,14 +8,53 @@ these tests, same convention as test_jobs.py.
 
 from __future__ import annotations
 
+import hashlib
+from types import SimpleNamespace
+
 from app.scrapers.dedup import (
+    _HASH_CHUNK_SIZE,
     compute_dedup_hash,
     dedupe_against_existing,
     dedupe_batch,
+    fetch_existing_dedup_hashes,
 )
 from app.scrapers.schemas import NormalizedJob
 
 from tests.fakes import FakeClient
+
+
+class _RecordingJobsTable:
+    """Local to this test file (not tests/fakes.py) -- tracks every `.in_()`
+    call's own batch, so a test can assert chunking actually happened, not
+    just that the final unioned result was correct."""
+
+    def __init__(self, existing_hashes: set[str]) -> None:
+        self._existing_hashes = existing_hashes
+        self._pending_in: list[str] | None = None
+        self.calls: list[list[str]] = []
+
+    def select(self, *_columns: str) -> _RecordingJobsTable:
+        return self
+
+    def in_(self, column: str, values: list[str]) -> _RecordingJobsTable:
+        assert column == "dedup_hash"
+        self._pending_in = list(values)
+        return self
+
+    async def execute(self) -> SimpleNamespace:
+        assert self._pending_in is not None
+        self.calls.append(self._pending_in)
+        matched = [h for h in self._pending_in if h in self._existing_hashes]
+        return SimpleNamespace(data=[{"dedup_hash": h} for h in matched])
+
+
+class _RecordingClient:
+    def __init__(self, existing_hashes: set[str]) -> None:
+        self.jobs = _RecordingJobsTable(existing_hashes)
+
+    def table(self, name: str) -> _RecordingJobsTable:
+        assert name == "jobs"
+        return self.jobs
 
 
 def _job(
@@ -197,3 +236,60 @@ async def test_dedupe_against_existing_handles_empty_batch_without_querying() ->
     result = await dedupe_against_existing([], client)
 
     assert result == []
+
+
+# --- fetch_existing_dedup_hashes(): chunking large batches -------------------
+#
+# Regression test for the Phase 2 verification finding: a single `.in_()`
+# call with a large hash list serializes into a query string that exceeds
+# PostgREST/Kong's URL length limit (414 URI too long), confirmed live
+# against ~500 real Greenhouse listings. `_RecordingClient` above tracks
+# every individual call's own batch so this asserts chunking actually
+# happened -- not just that the final unioned result was correct, which a
+# single oversized call would also get right against a real DB (until it
+# 414s) or a naive fake with no length limit.
+
+
+def _synthetic_hashes(count: int) -> list[str]:
+    return [hashlib.sha256(str(i).encode()).hexdigest() for i in range(count)]
+
+
+async def test_fetch_existing_dedup_hashes_chunks_large_batches() -> None:
+    hashes = _synthetic_hashes(550)
+    # A mix of existing/new spread across what will become multiple chunks,
+    # not just concentrated in the first one.
+    existing_hashes = {hashes[0], hashes[99], hashes[100], hashes[250], hashes[549]}
+    client = _RecordingClient(existing_hashes)
+
+    result = await fetch_existing_dedup_hashes(client, hashes)
+
+    assert result == existing_hashes
+
+
+async def test_fetch_existing_dedup_hashes_issues_multiple_requests_not_one_oversized_one() -> (
+    None
+):
+    hashes = _synthetic_hashes(550)
+    client = _RecordingClient(existing_hashes=set())
+
+    await fetch_existing_dedup_hashes(client, hashes)
+
+    assert len(client.jobs.calls) > 1, "550 hashes must not be sent as a single .in_() call"
+    assert len(client.jobs.calls) == -(-550 // _HASH_CHUNK_SIZE)  # ceil division
+    for call in client.jobs.calls:
+        assert len(call) <= _HASH_CHUNK_SIZE
+    # Every hash requested exactly once, none dropped or duplicated across chunks.
+    assert sorted(h for call in client.jobs.calls for h in call) == sorted(hashes)
+
+
+async def test_fetch_existing_dedup_hashes_small_batch_is_still_one_request() -> None:
+    """Chunking must not change behavior for the common case (a handful of
+    hashes) -- one request, same as before this fix."""
+
+    hashes = _synthetic_hashes(3)
+    client = _RecordingClient(existing_hashes={hashes[0]})
+
+    result = await fetch_existing_dedup_hashes(client, hashes)
+
+    assert result == {hashes[0]}
+    assert len(client.jobs.calls) == 1

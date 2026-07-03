@@ -73,6 +73,29 @@ in a `UNIQUE` column.
   management logic, not this module's job. Consequence: whatever inserts
   the surviving output of `dedupe_against_existing` can be a plain INSERT,
   never an upsert -- duplicates are filtered out beforehand.
+
+## Chunking the "already in `jobs`" check (Phase 2 verification fix)
+
+`fetch_existing_dedup_hashes` originally issued one `.in_("dedup_hash",
+hashes)` call for the whole batch. That's a GET request whose filter value
+is serialized into the URL's query string -- confirmed live during Phase 2
+verification: running the real worker against ~500 real Greenhouse
+listings produced a query string long enough that PostgREST/Kong (the
+proxy fronting it, in this project's Supabase stack) returned `414 URI too
+long`. The ARQ worker (`app/worker.py`) caught this and retried, but
+retrying rebuilds the identical oversized request every time -- a
+permanent failure disguised as a transient one.
+
+`_HASH_CHUNK_SIZE = 100` is not arbitrary: Kong/nginx's default
+`large_client_header_buffers` caps a request line at 8KB. Each
+`dedup_hash` is a fixed 64-character hex SHA-256 digest
+(`compute_dedup_hash`'s own output); serialized into `.in_()` as
+`dedup_hash=in.(h1,h2,...)`, each hash contributes roughly 65 bytes (64
+hex characters + one separator). 100 hashes is therefore ~6.5KB --
+comfortably under the 8KB limit with about 1.5KB of headroom left for the
+base URL, the `select=dedup_hash` parameter, and any client-side percent-
+encoding, rather than cutting it close to the theoretical ~120-hash
+maximum that 8KB alone would allow.
 """
 
 from __future__ import annotations
@@ -83,6 +106,9 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from app.scrapers.schemas import NormalizedJob
+
+# See the module docstring's "Chunking..." section for why 100, specifically.
+_HASH_CHUNK_SIZE = 100
 
 
 def _normalize_text(value: str) -> str:
@@ -144,15 +170,27 @@ async def fetch_existing_dedup_hashes(client: Any, hashes: Iterable[str]) -> set
     not a jobs repository -- writing the surviving new rows is a separate,
     later concern (the worker/DB-write commit `app/worker.py` already notes
     is still pending).
+
+    Issues one `.in_()` request per `_HASH_CHUNK_SIZE`-sized slice of
+    `hashes` rather than one request for the whole list -- see the module
+    docstring's "Chunking..." section for why a single request doesn't
+    scale to a real scrape's volume.
     """
 
     hash_list = list(hashes)
     if not hash_list:
         return set()
 
-    result = await client.table("jobs").select("dedup_hash").in_("dedup_hash", hash_list).execute()
-    rows = result.data if isinstance(result.data, list) else []
-    return {row["dedup_hash"] for row in rows if isinstance(row, dict) and "dedup_hash" in row}
+    existing: set[str] = set()
+    for start in range(0, len(hash_list), _HASH_CHUNK_SIZE):
+        chunk = hash_list[start : start + _HASH_CHUNK_SIZE]
+        result = await client.table("jobs").select("dedup_hash").in_("dedup_hash", chunk).execute()
+        rows = result.data if isinstance(result.data, list) else []
+        existing.update(
+            row["dedup_hash"] for row in rows if isinstance(row, dict) and "dedup_hash" in row
+        )
+
+    return existing
 
 
 async def dedupe_against_existing(jobs: list[NormalizedJob], client: Any) -> list[NormalizedJob]:

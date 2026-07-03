@@ -9,6 +9,9 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // userEvent-heavy component tests run slow when many jsdom suites run
+    // in parallel; the 5s default flakes under full-suite load.
+    testTimeout: 15_000,
   },
   resolve: {
     alias: {

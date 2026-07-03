@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { Logo } from "@/components/logo";
+import { useJobsCount } from "@/lib/queries/jobs";
 import { useProfile } from "@/lib/queries/profile";
 
 function NavLink({
@@ -46,9 +47,10 @@ function initialsOf(name: string): string {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
-export function Sidebar({ inboxCount }: { inboxCount?: number }) {
+export function Sidebar() {
   const pathname = usePathname();
   const { data: profile } = useProfile();
+  const { data: inboxCount } = useJobsCount();
 
   return (
     <div className="flex w-[232px] shrink-0 flex-col border-r border-line-soft bg-raised px-3.5 py-5">

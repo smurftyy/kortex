@@ -1,9 +1,16 @@
+import { RequireAuth } from "@/components/auth/guards";
+import { OnboardingGate } from "@/components/onboarding/onboarding-gate";
+
 export default function Home() {
   return (
-    <main className="flex min-h-screen items-center justify-center">
-      <p className="text-sm text-neutral-500">
-        Kortex — dashboard coming in Phase 3.
-      </p>
-    </main>
+    <RequireAuth>
+      <OnboardingGate>
+        <main className="flex min-h-screen items-center justify-center bg-surface">
+          <p className="text-sm text-ink-400">
+            Kortex — dashboard lands in the next commit.
+          </p>
+        </main>
+      </OnboardingGate>
+    </RequireAuth>
   );
 }

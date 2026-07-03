@@ -1,12 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { getMe } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/errors";
+import { useProfile } from "@/lib/queries/profile";
 
 /**
  * Blocks the dashboard until onboarding is complete. A 404
@@ -15,10 +14,7 @@ import { ApiError } from "@/lib/api/errors";
  */
 export function OnboardingGate({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { error, isPending, isSuccess, refetch } = useQuery({
-    queryKey: ["profile"],
-    queryFn: () => getMe(),
-  });
+  const { error, isPending, isSuccess, refetch } = useProfile();
 
   const profileMissing = error instanceof ApiError && error.status === 404;
 

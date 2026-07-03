@@ -11,7 +11,7 @@ against a real Postgres instance in Commits 2 and 5.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from types import SimpleNamespace
 from typing import Any
 
@@ -33,6 +33,11 @@ class _FakeQuery:
 
     def eq(self, column: str, value: Any) -> _FakeQuery:
         self._predicates.append(lambda row: row.get(column) == value)
+        return self
+
+    def in_(self, column: str, values: Iterable[Any]) -> _FakeQuery:
+        value_set = set(values)
+        self._predicates.append(lambda row: row.get(column) in value_set)
         return self
 
     def ilike(self, column: str, pattern: str) -> _FakeQuery:

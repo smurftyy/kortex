@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { JobListResponse } from "@/lib/api/types";
+import { ToastProvider } from "@/providers/toast-provider";
 
 import { InboxScreen } from "./inbox-screen";
 
@@ -11,6 +12,7 @@ const getPreferences = vi.fn();
 vi.mock("@/lib/api/endpoints", () => ({
   getJobs: (...args: unknown[]) => getJobs(...args),
   getPreferences: (...args: unknown[]) => getPreferences(...args),
+  actOnJob: vi.fn(),
 }));
 
 function renderScreen() {
@@ -19,7 +21,9 @@ function renderScreen() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <InboxScreen />
+      <ToastProvider>
+        <InboxScreen />
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }

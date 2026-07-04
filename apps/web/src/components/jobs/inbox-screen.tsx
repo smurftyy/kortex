@@ -10,8 +10,10 @@ import {
 } from "@/components/jobs/filter-bar";
 import { JobCard } from "@/components/jobs/job-card";
 import { Button } from "@/components/ui/button";
+import { useActedJobs } from "@/lib/acted-jobs";
 import type { JobsQuery } from "@/lib/api/types";
 import { formatLocalTime } from "@/lib/format";
+import { useJobAction } from "@/lib/mutations/job-actions";
 import { useJobsFeed, usePreferences } from "@/lib/queries/jobs";
 
 function greeting(): string {
@@ -39,8 +41,12 @@ export function InboxScreen() {
 
   const feed = useJobsFeed(filters);
   const { data: prefs } = usePreferences();
+  const actedJobs = useActedJobs();
+  const jobAction = useJobAction();
 
-  const jobs = feed.data?.pages.flatMap((p) => p.results) ?? [];
+  const jobs = (feed.data?.pages.flatMap((p) => p.results) ?? []).filter(
+    (job) => !actedJobs.has(job.job_id),
+  );
   const total = feed.data?.pages[0]?.total ?? 0;
   const nextScan = prefs ? formatLocalTime(prefs.digest_time_local) : null;
   const hasActiveFilters = Object.values(filters).some(Boolean);
@@ -185,7 +191,11 @@ export function InboxScreen() {
       {jobs.length > 0 && (
         <div className="flex flex-col gap-3.5">
           {jobs.map((job) => (
-            <JobCard key={job.job_id} job={job} />
+            <JobCard
+              key={job.job_id}
+              job={job}
+              onAction={(j, action) => jobAction.mutate({ job: j, action })}
+            />
           ))}
         </div>
       )}

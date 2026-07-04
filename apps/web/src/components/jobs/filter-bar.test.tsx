@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { JobListResponse, JobsQuery } from "@/lib/api/types";
+import { ToastProvider } from "@/providers/toast-provider";
 
 import { InboxScreen } from "./inbox-screen";
 
@@ -12,6 +13,7 @@ const getPreferences = vi.fn();
 vi.mock("@/lib/api/endpoints", () => ({
   getJobs: (...args: unknown[]) => getJobs(...args),
   getPreferences: (...args: unknown[]) => getPreferences(...args),
+  actOnJob: vi.fn(),
 }));
 
 const jobsPage: JobListResponse = {
@@ -45,7 +47,9 @@ function renderScreen() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <InboxScreen />
+      <ToastProvider>
+        <InboxScreen />
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }

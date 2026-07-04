@@ -10,6 +10,10 @@ import { ToastProvider } from "@/providers/toast-provider";
 
 import { InboxScreen } from "./inbox-screen";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
 const getJobs = vi.fn();
 const getPreferences = vi.fn();
 const actOnJob = vi.fn();

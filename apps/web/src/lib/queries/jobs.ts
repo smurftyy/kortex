@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
-import { getJobs, getPreferences } from "@/lib/api/endpoints";
+import { getJob, getJobs, getPreferences } from "@/lib/api/endpoints";
 import type { JobsQuery } from "@/lib/api/types";
 
 const PAGE_SIZE = 20;
@@ -27,6 +27,13 @@ export function useJobsCount() {
     queryFn: () => getJobs({ page: 1, page_size: 1 }),
     select: (data) => data.total,
     staleTime: 60_000,
+  });
+}
+
+export function useJob(jobId: string) {
+  return useQuery({
+    queryKey: ["job", jobId],
+    queryFn: () => getJob(jobId),
   });
 }
 

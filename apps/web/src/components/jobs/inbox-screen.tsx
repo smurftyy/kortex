@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
@@ -26,6 +27,7 @@ function greeting(): string {
 const DEBOUNCE_MS = 250;
 
 export function InboxScreen() {
+  const router = useRouter();
   const [ui, setUi] = useState<FilterUiState>(EMPTY_FILTERS);
   const [filters, setFilters] = useState<
     Omit<JobsQuery, "page" | "page_size">
@@ -195,6 +197,7 @@ export function InboxScreen() {
               key={job.job_id}
               job={job}
               onAction={(j, action) => jobAction.mutate({ job: j, action })}
+              onOpen={(j) => router.push(`/jobs/${j.job_id}`)}
             />
           ))}
         </div>

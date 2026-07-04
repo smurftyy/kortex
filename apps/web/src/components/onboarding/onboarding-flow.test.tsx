@@ -130,7 +130,7 @@ describe("OnboardingFlow", () => {
     });
 
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith("/");
+      expect(replaceMock).toHaveBeenCalledWith("/?welcome=1");
     });
   });
 

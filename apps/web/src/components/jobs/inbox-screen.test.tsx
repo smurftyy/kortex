@@ -7,8 +7,10 @@ import { ToastProvider } from "@/providers/toast-provider";
 
 import { InboxScreen } from "./inbox-screen";
 
+let searchParamsString = "";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(searchParamsString),
 }));
 
 const getJobs = vi.fn();
@@ -62,6 +64,7 @@ const jobsPage: JobListResponse = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  searchParamsString = "";
   getPreferences.mockResolvedValue({
     boards_enabled: ["greenhouse", "lever", "remoteok"],
     digest_time_local: "15:00",
@@ -99,6 +102,27 @@ describe("InboxScreen", () => {
     expect(
       screen.getByText(/after the next scheduled search, at 3:00 PM/i),
     ).toBeInTheDocument();
+  });
+
+  it("greets a just-onboarded user with the first-scan state and toast", async () => {
+    searchParamsString = "welcome=1";
+    getJobs.mockResolvedValue({ ...jobsPage, results: [], total: 0 });
+    renderScreen();
+
+    expect(
+      await screen.findByRole(
+        "heading",
+        { name: /you.re all set/i },
+        { timeout: 5000 },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/your first scan runs at 3:00 PM/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Setup complete. We'll start scanning today.",
+    );
+    expect(screen.queryByText(/you.re caught up/i)).not.toBeInTheDocument();
   });
 
   it("shows an error state with retry when the feed fails", async () => {

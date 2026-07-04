@@ -107,7 +107,9 @@ export function OnboardingFlow() {
         match_score_threshold: 2.0,
       });
     },
-    onSuccess: () => router.replace("/"),
+    // welcome=1 lets the inbox greet the first visit (design's
+    // "Setup complete" toast + first-scan empty state).
+    onSuccess: () => router.replace("/?welcome=1"),
   });
 
   const pending = saveProfile.isPending || finish.isPending;

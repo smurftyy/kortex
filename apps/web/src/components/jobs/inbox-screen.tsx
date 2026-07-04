@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
@@ -16,6 +16,7 @@ import type { JobsQuery } from "@/lib/api/types";
 import { formatLocalTime } from "@/lib/format";
 import { useJobAction } from "@/lib/mutations/job-actions";
 import { useJobsFeed, usePreferences } from "@/lib/queries/jobs";
+import { useToast } from "@/providers/toast-provider";
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -28,6 +29,10 @@ const DEBOUNCE_MS = 250;
 
 export function InboxScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
+  // Set by the onboarding flow's final redirect — the only reliable
+  // "brand new user" signal while the feed API has no per-user state.
+  const justOnboarded = useSearchParams().get("welcome") === "1";
   const [ui, setUi] = useState<FilterUiState>(EMPTY_FILTERS);
   const [filters, setFilters] = useState<
     Omit<JobsQuery, "page" | "page_size">
@@ -40,6 +45,10 @@ export function InboxScreen() {
     );
     return () => clearTimeout(timer);
   }, [ui]);
+
+  useEffect(() => {
+    if (justOnboarded) showToast("Setup complete. We'll start scanning today.");
+  }, [justOnboarded, showToast]);
 
   const feed = useJobsFeed(filters);
   const { data: prefs } = usePreferences();
@@ -125,30 +134,61 @@ export function InboxScreen() {
           className="flex flex-col items-center px-5 py-[90px] text-center"
           style={{ animation: "fadeIn 0.3s ease-out" }}
         >
-          <div className="mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-success-tint text-success">
-            <svg
-              width="26"
-              height="26"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-          </div>
-          <h2 className="mb-2 text-[20px] font-bold text-ink-900">
-            You&rsquo;re caught up.
-          </h2>
-          <p className="max-w-[340px] text-[14.5px] leading-relaxed text-ink-500">
-            {nextScan
-              ? `We'll notify you after the next scheduled search, at ${nextScan}.`
-              : "We'll notify you after the next scheduled search."}
-          </p>
+          {justOnboarded ? (
+            <>
+              <div className="mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-accent-tint text-accent-deep">
+                <svg
+                  width="26"
+                  height="26"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </div>
+              <h2 className="mb-2 text-[20px] font-bold text-ink-900">
+                You&rsquo;re all set.
+              </h2>
+              <p className="max-w-[340px] text-[14.5px] leading-relaxed text-ink-500">
+                {nextScan
+                  ? `Your first scan runs at ${nextScan}. Anything that matches your profile will be waiting here.`
+                  : "Your first scan is scheduled. Anything that matches your profile will be waiting here."}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-success-tint text-success">
+                <svg
+                  width="26"
+                  height="26"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
+              <h2 className="mb-2 text-[20px] font-bold text-ink-900">
+                You&rsquo;re caught up.
+              </h2>
+              <p className="max-w-[340px] text-[14.5px] leading-relaxed text-ink-500">
+                {nextScan
+                  ? `We'll notify you after the next scheduled search, at ${nextScan}.`
+                  : "We'll notify you after the next scheduled search."}
+              </p>
+            </>
+          )}
         </div>
       )}
 

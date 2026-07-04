@@ -10,6 +10,7 @@ import { InboxScreen } from "./inbox-screen";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 const getJobs = vi.fn();
